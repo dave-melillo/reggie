@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Guest {
+  id                  String   @id @default(uuid())
+  firstName           String
+  lastName            String
+  email               String?
+  phone               String?
+  invitationType      String
+  rsvpStatus          String   @default("not-sent")
+  mealPreference      String?
+  dietaryRestrictions String?
+  plusOneAllowed      Boolean  @default(false)
+  plusOneName         String?
+  plusOneRsvpStatus   String?
+  tableAssignment     String?
+  guestGroup          String?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([rsvpStatus])
+}
+
+model Vendor {
+  id                  String    @id @default(uuid())
+  category            String
+  businessName        String
+  contactName         String
+  email               String?
+  phone               String
+  contractAmount      Int
+  depositAmount       Int
+  depositPaid         Boolean   @default(false)
+  depositDueDate      DateTime?
+  finalPaymentAmount  Int
+  finalPaymentPaid    Boolean   @default(false)
+  finalPaymentDueDate DateTime?
+  deliverables        String
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model Venue {
+  id                  String   @id @default(uuid())
+  venueName           String
+  address             String
+  contactName         String
+  phone               String
+  capacity            Int
+  perHeadCost         Int
+  baseRentalCost      Int
+  depositAmount       Int
+  depositPaid         Boolean  @default(false)
+  finalPaymentAmount  Int
+  finalPaymentPaid    Boolean  @default(false)
+  totalCost           Int
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model ExpenseItem {
+  id            String    @id @default(uuid())
+  category      String
+  description   String
+  plannedAmount Int
+  actualAmount  Int
+  paidDate      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model FinancialSummary {
+  id          String   @id @default(uuid())
+  totalBudget Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
