@@ -114,7 +114,7 @@ export default function Dashboard() {
   };
 
   // Wedding date
-  const weddingDate = new Date('2026-05-29');
+  const weddingDate = new Date(2026, 4, 29); // May 29, 2026 (month is 0-indexed)
   const today = new Date();
   const daysUntil = Math.ceil((weddingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
