@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Guest {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  category    String   // FAMILY, FRIEND, WORK, VENDOR
+  inviteType  String   // CEREMONY_RECEPTION, RECEPTION_ONLY
+  plusOne     Boolean  @default(false)
+  rsvpStatus  String   @default("PENDING") // PENDING, CONFIRMED, DECLINED
+  dietaryRestrictions String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Vendor {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   // VENUE, CATERING, PHOTOGRAPHY, etc.
+  contact     String
+  email       String?
+  phone       String?
+  contractedAmount Int  // in cents
+  paidAmount  Int      @default(0) // in cents
+  dueDate     DateTime?
+  status      String   @default("PENDING") // PENDING, CONTRACTED, PAID
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tasks       Task[]
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  category    String   // PLANNING, VENDOR, GUEST, DAY_OF
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH
+  status      String   @default("TODO") // TODO, IN_PROGRESS, DONE
+  dueDate     DateTime?
+  assignedTo  String?
+  vendorId    String?
+  vendor      Vendor?  @relation(fields: [vendorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Timeline {
+  id          String   @id @default(cuid())
+  eventDate   DateTime
+  title       String
+  description String?
+  location    String?
+  duration    Int      // minutes
+  category    String   // CEREMONY, RECEPTION, VENDOR
+  status      String   @default("PLANNED") // PLANNED, CONFIRMED, COMPLETE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Financial {
+  id          String   @id @default(cuid())
+  category    String   // VENUE, CATERING, PHOTOGRAPHY, etc.
+  description String
+  budgetAmount Int     // in cents
+  actualAmount Int     @default(0) // in cents
+  paidAmount  Int      @default(0) // in cents
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Venue {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // CEREMONY, RECEPTION, BOTH
+  address     String
+  capacity    Int
+  rentalCost  Int      // in cents
+  contact     String
+  phone       String?
+  email       String?
+  availableFrom DateTime
+  availableTo DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
