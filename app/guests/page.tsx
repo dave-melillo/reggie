@@ -21,8 +21,22 @@ export default function GuestsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("ALL");
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  // Form state
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    category: "FAMILY",
+    inviteType: "CEREMONY_RECEPTION",
+    plusOne: false,
+    dietaryRestrictions: "",
+    notes: "",
+  });
+
+  const loadGuests = () => {
     fetch('/api/guests')
       .then(res => res.json())
       .then(data => {
@@ -33,7 +47,51 @@ export default function GuestsPage() {
         console.error('Failed to load guests:', err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadGuests();
   }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const response = await fetch('/api/guests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        // Success - reload guests and close form
+        await loadGuests();
+        setShowForm(false);
+        // Reset form
+        setFormData({
+          firstName: "",
+          lastName: "",
+          email: "",
+          phone: "",
+          category: "FAMILY",
+          inviteType: "CEREMONY_RECEPTION",
+          plusOne: false,
+          dietaryRestrictions: "",
+          notes: "",
+        });
+      } else {
+        alert('Failed to add guest');
+      }
+    } catch (error) {
+      console.error('Error adding guest:', error);
+      alert('Error adding guest');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const filteredGuests = filter === "ALL" 
     ? guests 
@@ -178,7 +236,7 @@ export default function GuestsPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Add Guest</h2>
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   First Name *
@@ -186,6 +244,8 @@ export default function GuestsPage() {
                 <input
                   type="text"
                   required
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({...formData, firstName: e.target.value})}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
@@ -196,6 +256,8 @@ export default function GuestsPage() {
                 <input
                   type="text"
                   required
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({...formData, lastName: e.target.value})}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
@@ -205,6 +267,8 @@ export default function GuestsPage() {
                 </label>
                 <input
                   type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
@@ -214,6 +278,8 @@ export default function GuestsPage() {
                 </label>
                 <input
                   type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
@@ -221,24 +287,38 @@ export default function GuestsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Category *
                 </label>
-                <select className="w-full border border-gray-300 rounded-md px-3 py-2">
-                  <option>FAMILY</option>
-                  <option>FRIEND</option>
-                  <option>WORK</option>
-                  <option>VENDOR</option>
+                <select 
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="FAMILY">FAMILY</option>
+                  <option value="FRIEND">FRIEND</option>
+                  <option value="WORK">WORK</option>
+                  <option value="VENDOR">VENDOR</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Invite Type *
                 </label>
-                <select className="w-full border border-gray-300 rounded-md px-3 py-2">
-                  <option>CEREMONY_RECEPTION</option>
-                  <option>RECEPTION_ONLY</option>
+                <select 
+                  value={formData.inviteType}
+                  onChange={(e) => setFormData({...formData, inviteType: e.target.value})}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="CEREMONY_RECEPTION">CEREMONY_RECEPTION</option>
+                  <option value="RECEPTION_ONLY">RECEPTION_ONLY</option>
                 </select>
               </div>
               <div className="flex items-center">
-                <input type="checkbox" className="mr-2" id="plusOne" />
+                <input 
+                  type="checkbox" 
+                  id="plusOne"
+                  checked={formData.plusOne}
+                  onChange={(e) => setFormData({...formData, plusOne: e.target.checked})}
+                  className="mr-2" 
+                />
                 <label htmlFor="plusOne" className="text-sm text-gray-700">Plus One</label>
               </div>
               <div>
@@ -246,6 +326,8 @@ export default function GuestsPage() {
                   Dietary Restrictions
                 </label>
                 <textarea
+                  value={formData.dietaryRestrictions}
+                  onChange={(e) => setFormData({...formData, dietaryRestrictions: e.target.value})}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                   rows={2}
                 />
@@ -255,6 +337,8 @@ export default function GuestsPage() {
                   Notes
                 </label>
                 <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                   rows={2}
                 />
@@ -263,15 +347,17 @@ export default function GuestsPage() {
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 transition-colors"
+                  disabled={submitting}
+                  className="flex-1 border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
+                  disabled={submitting}
+                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
                 >
-                  Add Guest
+                  {submitting ? 'Adding...' : 'Add Guest'}
                 </button>
               </div>
             </form>
