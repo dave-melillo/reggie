@@ -6,12 +6,14 @@ type Venue = {
   id: string;
   name: string;
   type: string;
-  address?: string;
-  capacity?: number;
-  status: string;
-  contactPerson?: string;
+  address: string;
+  capacity: number;
+  rentalCost: number;
+  contact: string;
   phone?: string;
   email?: string;
+  availableFrom: string;
+  availableTo: string;
   notes?: string;
 };
 
@@ -21,19 +23,20 @@ export default function VenuePage() {
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'view' | 'edit'>('create');
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
-  const [filter, setFilter] = useState("ALL");
   const [submitting, setSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
-    type: "CEREMONY",
+    type: "BOTH",
     address: "",
-    capacity: "",
-    status: "RESEARCHING",
-    contactPerson: "",
+    capacity: 150,
+    rentalCost: 0,
+    contact: "",
     phone: "",
     email: "",
+    availableFrom: "",
+    availableTo: "",
     notes: "",
   });
 
@@ -54,18 +57,44 @@ export default function VenuePage() {
     loadVenues();
   }, []);
 
+  const formatCurrency = (cents: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(cents / 100);
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const formatDateTimeForInput = (dateString: string) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toISOString().slice(0, 16);
+  };
+
   const openCreateModal = () => {
     setModalMode('create');
     setSelectedVenue(null);
     setFormData({
       name: "",
-      type: "CEREMONY",
+      type: "BOTH",
       address: "",
-      capacity: "",
-      status: "RESEARCHING",
-      contactPerson: "",
+      capacity: 150,
+      rentalCost: 0,
+      contact: "",
       phone: "",
       email: "",
+      availableFrom: "",
+      availableTo: "",
       notes: "",
     });
     setShowModal(true);
@@ -77,12 +106,14 @@ export default function VenuePage() {
     setFormData({
       name: venue.name,
       type: venue.type,
-      address: venue.address || "",
-      capacity: venue.capacity?.toString() || "",
-      status: venue.status,
-      contactPerson: venue.contactPerson || "",
+      address: venue.address,
+      capacity: venue.capacity,
+      rentalCost: venue.rentalCost,
+      contact: venue.contact,
       phone: venue.phone || "",
       email: venue.email || "",
+      availableFrom: formatDateTimeForInput(venue.availableFrom),
+      availableTo: formatDateTimeForInput(venue.availableTo),
       notes: venue.notes || "",
     });
     setShowModal(true);
@@ -105,7 +136,8 @@ export default function VenuePage() {
 
       const payload = {
         ...formData,
-        capacity: formData.capacity ? parseInt(formData.capacity) : null,
+        availableFrom: new Date(formData.availableFrom).toISOString(),
+        availableTo: new Date(formData.availableTo).toISOString(),
       };
 
       const response = await fetch(url, {
@@ -154,13 +186,8 @@ export default function VenuePage() {
     }
   };
 
-  const filteredVenues = filter === "ALL" 
-    ? venues 
-    : venues.filter(v => v.status === filter);
-
-  const researching = venues.filter(v => v.status === "RESEARCHING").length;
-  const contacted = venues.filter(v => v.status === "CONTACTED").length;
-  const booked = venues.filter(v => v.status === "BOOKED").length;
+  const totalCost = venues.reduce((sum, v) => sum + v.rentalCost, 0);
+  const totalCapacity = venues.reduce((sum, v) => sum + v.capacity, 0);
 
   if (loading) {
     return (
@@ -182,119 +209,71 @@ export default function VenuePage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <p className="text-sm text-gray-600">Total Venues</p>
           <p className="text-2xl font-bold text-gray-900">{venues.length}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <p className="text-sm text-gray-600">Researching</p>
-          <p className="text-2xl font-bold text-orange-600">{researching}</p>
+          <p className="text-sm text-gray-600">Total Rental Cost</p>
+          <p className="text-2xl font-bold text-purple-600">{formatCurrency(totalCost)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <p className="text-sm text-gray-600">Contacted</p>
-          <p className="text-2xl font-bold text-blue-600">{contacted}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <p className="text-sm text-gray-600">Booked</p>
-          <p className="text-2xl font-bold text-green-600">{booked}</p>
+          <p className="text-sm text-gray-600">Total Capacity</p>
+          <p className="text-2xl font-bold text-blue-600">{totalCapacity} guests</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border p-4">
-        <div className="flex items-center space-x-2 mb-4">
-          <label className="text-sm font-medium text-gray-700">Filter:</label>
-          <select 
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-1 text-sm"
+      {venues.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+          <p className="text-gray-500 text-lg mb-4">No venues added yet</p>
+          <button
+            onClick={openCreateModal}
+            className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700 transition-colors"
           >
-            <option value="ALL">All Venues</option>
-            <option value="RESEARCHING">Researching</option>
-            <option value="CONTACTED">Contacted</option>
-            <option value="BOOKED">Booked</option>
-            <option value="REJECTED">Rejected</option>
-          </select>
+            Add Your First Venue
+          </button>
         </div>
-
-        {filteredVenues.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg mb-4">No venues found</p>
-            <button
-              onClick={openCreateModal}
-              className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700 transition-colors"
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {venues.map((venue) => (
+            <div
+              key={venue.id}
+              onClick={() => openViewModal(venue)}
+              className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md cursor-pointer transition-shadow"
             >
-              Add Your First Venue
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Address
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Capacity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredVenues.map((venue) => (
-                  <tr 
-                    key={venue.id} 
-                    onClick={() => openViewModal(venue)}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {venue.name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {venue.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {venue.address || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {venue.capacity || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {venue.contactPerson || venue.phone || venue.email || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        venue.status === 'BOOKED' ? 'bg-green-100 text-green-800' :
-                        venue.status === 'CONTACTED' ? 'bg-blue-100 text-blue-800' :
-                        venue.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                        'bg-orange-100 text-orange-800'
-                      }`}>
-                        {venue.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{venue.name}</h2>
+                  <span className={`inline-block px-3 py-1 mt-2 text-sm font-semibold rounded-full ${
+                    venue.type === 'CEREMONY' ? 'bg-purple-100 text-purple-800' :
+                    venue.type === 'RECEPTION' ? 'bg-pink-100 text-pink-800' :
+                    'bg-blue-100 text-blue-800'
+                  }`}>
+                    {venue.type}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-purple-600">{formatCurrency(venue.rentalCost)}</p>
+                  <p className="text-xs text-gray-500">Rental Cost</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center text-gray-600">
+                  <span>📍 {venue.address}</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <span>👥 Capacity: {venue.capacity} guests</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <span>📞 {venue.contact}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Modal for Create/View/Edit */}
       {showModal && (
@@ -318,42 +297,35 @@ export default function VenuePage() {
             {modalMode === 'view' ? (
               <div className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Name</p>
+                  <p className="text-sm font-medium text-gray-700">Venue Name</p>
                   <p className="text-gray-900">{formData.name}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-700">Type</p>
-                  <p className="text-gray-900">{formData.type}</p>
-                </div>
-                {formData.address && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Address</p>
-                    <p className="text-gray-900">{formData.address}</p>
-                  </div>
-                )}
-                {formData.capacity && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Capacity</p>
-                    <p className="text-gray-900">{formData.capacity}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Status</p>
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    formData.status === 'BOOKED' ? 'bg-green-100 text-green-800' :
-                    formData.status === 'CONTACTED' ? 'bg-blue-100 text-blue-800' :
-                    formData.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                    'bg-orange-100 text-orange-800'
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    formData.type === 'CEREMONY' ? 'bg-purple-100 text-purple-800' :
+                    formData.type === 'RECEPTION' ? 'bg-pink-100 text-pink-800' :
+                    'bg-blue-100 text-blue-800'
                   }`}>
-                    {formData.status}
+                    {formData.type}
                   </span>
                 </div>
-                {formData.contactPerson && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Contact Person</p>
-                    <p className="text-gray-900">{formData.contactPerson}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Address</p>
+                  <p className="text-gray-900">{formData.address}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Capacity</p>
+                  <p className="text-gray-900">{formData.capacity} guests</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Rental Cost</p>
+                  <p className="text-gray-900">{formatCurrency(formData.rentalCost)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Contact</p>
+                  <p className="text-gray-900">{formData.contact}</p>
+                </div>
                 {formData.phone && (
                   <div>
                     <p className="text-sm font-medium text-gray-700">Phone</p>
@@ -366,6 +338,14 @@ export default function VenuePage() {
                     <p className="text-gray-900">{formData.email}</p>
                   </div>
                 )}
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Available From</p>
+                  <p className="text-gray-900">{formatDateTime(formData.availableFrom)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Available To</p>
+                  <p className="text-gray-900">{formatDateTime(formData.availableTo)}</p>
+                </div>
                 {formData.notes && (
                   <div>
                     <p className="text-sm font-medium text-gray-700">Notes</p>
@@ -390,9 +370,7 @@ export default function VenuePage() {
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Venue Name *</label>
                   <input
                     type="text"
                     required
@@ -402,72 +380,61 @@ export default function VenuePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
                   <select 
                     value={formData.type}
                     onChange={(e) => setFormData({...formData, type: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   >
-                    <option value="CEREMONY">CEREMONY</option>
-                    <option value="RECEPTION">RECEPTION</option>
-                    <option value="BOTH">BOTH</option>
-                    <option value="HOTEL">HOTEL</option>
+                    <option value="CEREMONY">Ceremony</option>
+                    <option value="RECEPTION">Reception</option>
+                    <option value="BOTH">Both</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
                   <input
                     type="text"
+                    required
                     value={formData.address}
                     onChange={(e) => setFormData({...formData, address: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Capacity
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Capacity *</label>
                   <input
                     type="number"
+                    required
+                    min="1"
                     value={formData.capacity}
-                    onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                    onChange={(e) => setFormData({...formData, capacity: parseInt(e.target.value) || 150})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status *
-                  </label>
-                  <select 
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rental Cost ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.rentalCost / 100}
+                    onChange={(e) => setFormData({...formData, rentalCost: Math.round(parseFloat(e.target.value || "0") * 100)})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  >
-                    <option value="RESEARCHING">RESEARCHING</option>
-                    <option value="CONTACTED">CONTACTED</option>
-                    <option value="BOOKED">BOOKED</option>
-                    <option value="REJECTED">REJECTED</option>
-                  </select>
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Contact Person
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact *</label>
                   <input
                     type="text"
-                    value={formData.contactPerson}
-                    onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                    required
+                    value={formData.contact}
+                    onChange={(e) => setFormData({...formData, contact: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder="e.g., Lauren Good"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                   <input
                     type="tel"
                     value={formData.phone}
@@ -476,9 +443,7 @@ export default function VenuePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
                     type="email"
                     value={formData.email}
@@ -487,14 +452,32 @@ export default function VenuePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Available From *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={formData.availableFrom}
+                    onChange={(e) => setFormData({...formData, availableFrom: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Available To *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={formData.availableTo}
+                    onChange={(e) => setFormData({...formData, availableTo: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                   <textarea
                     value={formData.notes}
                     onChange={(e) => setFormData({...formData, notes: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                    rows={2}
+                    rows={3}
                   />
                 </div>
                 <div className="flex space-x-3 pt-4">
@@ -526,7 +509,7 @@ export default function VenuePage() {
           <div className="bg-white rounded-lg p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold mb-2">Delete Venue</h3>
             <p className="text-gray-600 mb-4">
-              Are you sure you want to delete {formData.name}? This action cannot be undone.
+              Are you sure you want to delete "{formData.name}"? This action cannot be undone.
             </p>
             <div className="flex space-x-3">
               <button

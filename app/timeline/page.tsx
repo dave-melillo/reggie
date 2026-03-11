@@ -4,14 +4,13 @@ import { useState, useEffect } from "react";
 
 type TimelineEvent = {
   id: string;
+  eventDate: string;
   title: string;
   description?: string;
-  date: string;
-  time?: string;
   location?: string;
-  type: string;
+  duration: number;
+  category: string;
   status: string;
-  notes?: string;
 };
 
 export default function TimelinePage() {
@@ -27,12 +26,11 @@ export default function TimelinePage() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    date: "",
-    time: "",
+    eventDate: "",
     location: "",
-    type: "CEREMONY",
+    duration: 60,
+    category: "CEREMONY",
     status: "PLANNED",
-    notes: "",
   });
 
   const loadEvents = () => {
@@ -52,18 +50,34 @@ export default function TimelinePage() {
     loadEvents();
   }, []);
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const formatDateTimeForInput = (dateString: string) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toISOString().slice(0, 16);
+  };
+
   const openCreateModal = () => {
     setModalMode('create');
     setSelectedEvent(null);
     setFormData({
       title: "",
       description: "",
-      date: "",
-      time: "",
+      eventDate: "",
       location: "",
-      type: "CEREMONY",
+      duration: 60,
+      category: "CEREMONY",
       status: "PLANNED",
-      notes: "",
     });
     setShowModal(true);
   };
@@ -74,12 +88,11 @@ export default function TimelinePage() {
     setFormData({
       title: event.title,
       description: event.description || "",
-      date: event.date,
-      time: event.time || "",
+      eventDate: formatDateTimeForInput(event.eventDate),
       location: event.location || "",
-      type: event.type,
+      duration: event.duration,
+      category: event.category,
       status: event.status,
-      notes: event.notes || "",
     });
     setShowModal(true);
   };
@@ -102,7 +115,10 @@ export default function TimelinePage() {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          eventDate: new Date(formData.eventDate).toISOString(),
+        }),
       });
 
       if (response.ok) {
@@ -147,11 +163,16 @@ export default function TimelinePage() {
 
   const filteredEvents = filter === "ALL" 
     ? events 
-    : events.filter(e => e.type === filter);
+    : events.filter(e => e.category === filter);
+
+  // Sort by eventDate
+  const sortedEvents = [...filteredEvents].sort((a, b) => 
+    new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+  );
 
   const planned = events.filter(e => e.status === "PLANNED").length;
   const confirmed = events.filter(e => e.status === "CONFIRMED").length;
-  const completed = events.filter(e => e.status === "COMPLETED").length;
+  const complete = events.filter(e => e.status === "COMPLETE").length;
 
   if (loading) {
     return (
@@ -164,7 +185,7 @@ export default function TimelinePage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Timeline Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Day-Of Timeline</h1>
         <button
           onClick={openCreateModal}
           className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
@@ -187,8 +208,8 @@ export default function TimelinePage() {
           <p className="text-2xl font-bold text-blue-600">{confirmed}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <p className="text-sm text-gray-600">Completed</p>
-          <p className="text-2xl font-bold text-green-600">{completed}</p>
+          <p className="text-sm text-gray-600">Complete</p>
+          <p className="text-2xl font-bold text-green-600">{complete}</p>
         </div>
       </div>
 
@@ -203,12 +224,11 @@ export default function TimelinePage() {
             <option value="ALL">All Events</option>
             <option value="CEREMONY">Ceremony</option>
             <option value="RECEPTION">Reception</option>
-            <option value="PRE_EVENT">Pre-Event</option>
-            <option value="POST_EVENT">Post-Event</option>
+            <option value="VENDOR">Vendor</option>
           </select>
         </div>
 
-        {filteredEvents.length === 0 ? (
+        {sortedEvents.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg mb-4">No events found</p>
             <button
@@ -219,66 +239,48 @@ export default function TimelinePage() {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Title
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date/Time
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Location
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredEvents.map((event) => (
-                  <tr 
-                    key={event.id} 
-                    onClick={() => openViewModal(event)}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {event.title}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {new Date(event.date).toLocaleDateString()}
-                        {event.time && ` at ${event.time}`}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {event.location || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {event.type.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        event.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                        event.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-800' :
-                        'bg-orange-100 text-orange-800'
-                      }`}>
-                        {event.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            {sortedEvents.map((event) => (
+              <div
+                key={event.id}
+                onClick={() => openViewModal(event)}
+                className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <div className="flex-shrink-0 w-24 text-center">
+                  <div className="text-lg font-bold text-purple-600">
+                    {new Date(event.eventDate).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {event.duration} min
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
+                  {event.description && (
+                    <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                  )}
+                  {event.location && (
+                    <p className="text-sm text-gray-500 mt-1">📍 {event.location}</p>
+                  )}
+                </div>
+                <div className="flex flex-col items-end space-y-2">
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    event.category === 'CEREMONY' ? 'bg-purple-100 text-purple-800' :
+                    event.category === 'RECEPTION' ? 'bg-pink-100 text-pink-800' :
+                    'bg-blue-100 text-blue-800'
+                  }`}>
+                    {event.category}
+                  </span>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    event.status === 'COMPLETE' ? 'bg-green-100 text-green-800' :
+                    event.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-800' :
+                    'bg-orange-100 text-orange-800'
+                  }`}>
+                    {event.status}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -315,15 +317,13 @@ export default function TimelinePage() {
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Date</p>
-                  <p className="text-gray-900">{new Date(formData.date).toLocaleDateString()}</p>
+                  <p className="text-sm font-medium text-gray-700">Date & Time</p>
+                  <p className="text-gray-900">{formatDateTime(formData.eventDate)}</p>
                 </div>
-                {formData.time && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Time</p>
-                    <p className="text-gray-900">{formData.time}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Duration</p>
+                  <p className="text-gray-900">{formData.duration} minutes</p>
+                </div>
                 {formData.location && (
                   <div>
                     <p className="text-sm font-medium text-gray-700">Location</p>
@@ -331,25 +331,25 @@ export default function TimelinePage() {
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Type</p>
-                  <p className="text-gray-900">{formData.type.replace('_', ' ')}</p>
+                  <p className="text-sm font-medium text-gray-700">Category</p>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    formData.category === 'CEREMONY' ? 'bg-purple-100 text-purple-800' :
+                    formData.category === 'RECEPTION' ? 'bg-pink-100 text-pink-800' :
+                    'bg-blue-100 text-blue-800'
+                  }`}>
+                    {formData.category}
+                  </span>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-700">Status</p>
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    formData.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    formData.status === 'COMPLETE' ? 'bg-green-100 text-green-800' :
                     formData.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-800' :
                     'bg-orange-100 text-orange-800'
                   }`}>
                     {formData.status}
                   </span>
                 </div>
-                {formData.notes && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Notes</p>
-                    <p className="text-gray-900">{formData.notes}</p>
-                  </div>
-                )}
                 <div className="flex space-x-3 pt-4">
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
@@ -368,9 +368,7 @@ export default function TimelinePage() {
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                   <input
                     type="text"
                     required
@@ -380,9 +378,7 @@ export default function TimelinePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
@@ -391,32 +387,28 @@ export default function TimelinePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time *</label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     required
-                    value={formData.date}
-                    onChange={(e) => setFormData({...formData, date: e.target.value})}
+                    value={formData.eventDate}
+                    onChange={(e) => setFormData({...formData, eventDate: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Time
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes) *</label>
                   <input
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData({...formData, time: e.target.value})}
+                    type="number"
+                    required
+                    min="1"
+                    value={formData.duration}
+                    onChange={(e) => setFormData({...formData, duration: parseInt(e.target.value) || 60})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Location
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                   <input
                     type="text"
                     value={formData.location}
@@ -425,44 +417,28 @@ export default function TimelinePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                   <select 
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
+                    value={formData.category}
+                    onChange={(e) => setFormData({...formData, category: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   >
-                    <option value="CEREMONY">CEREMONY</option>
-                    <option value="RECEPTION">RECEPTION</option>
-                    <option value="PRE_EVENT">PRE_EVENT</option>
-                    <option value="POST_EVENT">POST_EVENT</option>
+                    <option value="CEREMONY">Ceremony</option>
+                    <option value="RECEPTION">Reception</option>
+                    <option value="VENDOR">Vendor</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
                   <select 
                     value={formData.status}
                     onChange={(e) => setFormData({...formData, status: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   >
-                    <option value="PLANNED">PLANNED</option>
-                    <option value="CONFIRMED">CONFIRMED</option>
-                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="PLANNED">Planned</option>
+                    <option value="CONFIRMED">Confirmed</option>
+                    <option value="COMPLETE">Complete</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                    rows={2}
-                  />
                 </div>
                 <div className="flex space-x-3 pt-4">
                   <button
@@ -493,7 +469,7 @@ export default function TimelinePage() {
           <div className="bg-white rounded-lg p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold mb-2">Delete Event</h3>
             <p className="text-gray-600 mb-4">
-              Are you sure you want to delete {formData.title}? This action cannot be undone.
+              Are you sure you want to delete "{formData.title}"? This action cannot be undone.
             </p>
             <div className="flex space-x-3">
               <button

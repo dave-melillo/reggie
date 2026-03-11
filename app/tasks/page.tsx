@@ -6,12 +6,12 @@ type Task = {
   id: string;
   title: string;
   description?: string;
-  status: string;
-  priority: string;
-  dueDate?: string;
-  assignee?: string;
   category: string;
-  notes?: string;
+  priority: string;
+  status: string;
+  dueDate?: string;
+  assignedTo?: string;
+  vendorId?: string;
 };
 
 export default function TasksPage() {
@@ -27,12 +27,11 @@ export default function TasksPage() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    status: "TODO",
-    priority: "MEDIUM",
-    dueDate: "",
-    assignee: "",
     category: "PLANNING",
-    notes: "",
+    priority: "MEDIUM",
+    status: "TODO",
+    dueDate: "",
+    assignedTo: "",
   });
 
   const loadTasks = () => {
@@ -52,18 +51,22 @@ export default function TasksPage() {
     loadTasks();
   }, []);
 
+  const formatDateForInput = (dateString: string | undefined) => {
+    if (!dateString) return "";
+    return new Date(dateString).toISOString().slice(0, 10);
+  };
+
   const openCreateModal = () => {
     setModalMode('create');
     setSelectedTask(null);
     setFormData({
       title: "",
       description: "",
-      status: "TODO",
-      priority: "MEDIUM",
-      dueDate: "",
-      assignee: "",
       category: "PLANNING",
-      notes: "",
+      priority: "MEDIUM",
+      status: "TODO",
+      dueDate: "",
+      assignedTo: "",
     });
     setShowModal(true);
   };
@@ -74,12 +77,11 @@ export default function TasksPage() {
     setFormData({
       title: task.title,
       description: task.description || "",
-      status: task.status,
-      priority: task.priority,
-      dueDate: task.dueDate || "",
-      assignee: task.assignee || "",
       category: task.category,
-      notes: task.notes || "",
+      priority: task.priority,
+      status: task.status,
+      dueDate: formatDateForInput(task.dueDate),
+      assignedTo: task.assignedTo || "",
     });
     setShowModal(true);
   };
@@ -99,10 +101,15 @@ export default function TasksPage() {
       
       const method = modalMode === 'create' ? 'POST' : 'PUT';
 
+      const payload = {
+        ...formData,
+        dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : null,
+      };
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -151,7 +158,7 @@ export default function TasksPage() {
 
   const todo = tasks.filter(t => t.status === "TODO").length;
   const inProgress = tasks.filter(t => t.status === "IN_PROGRESS").length;
-  const completed = tasks.filter(t => t.status === "COMPLETED").length;
+  const done = tasks.filter(t => t.status === "DONE").length;
 
   if (loading) {
     return (
@@ -187,8 +194,8 @@ export default function TasksPage() {
           <p className="text-2xl font-bold text-blue-600">{inProgress}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <p className="text-sm text-gray-600">Completed</p>
-          <p className="text-2xl font-bold text-green-600">{completed}</p>
+          <p className="text-sm text-gray-600">Done</p>
+          <p className="text-2xl font-bold text-green-600">{done}</p>
         </div>
       </div>
 
@@ -203,7 +210,7 @@ export default function TasksPage() {
             <option value="ALL">All Tasks</option>
             <option value="TODO">To Do</option>
             <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
+            <option value="DONE">Done</option>
           </select>
         </div>
 
@@ -218,75 +225,48 @@ export default function TasksPage() {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Title
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Priority
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Due Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Assignee
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTasks.map((task) => (
-                  <tr 
-                    key={task.id} 
-                    onClick={() => openViewModal(task)}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {task.title}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {task.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        task.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                        task.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
-                        'bg-orange-100 text-orange-800'
-                      }`}>
-                        {task.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        task.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
-                        task.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {task.priority}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {task.assignee || '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {filteredTasks.map((task) => (
+              <div
+                key={task.id}
+                onClick={() => openViewModal(task)}
+                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3">
+                    <h3 className="text-lg font-medium text-gray-900">{task.title}</h3>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      task.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
+                      task.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {task.priority}
+                    </span>
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      {task.category.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {task.description && (
+                    <p className="text-sm text-gray-600 mt-1">{task.description}</p>
+                  )}
+                  <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                    {task.dueDate && (
+                      <span>Due: {new Date(task.dueDate).toLocaleDateString()}</span>
+                    )}
+                    {task.assignedTo && (
+                      <span>Assigned to: {task.assignedTo}</span>
+                    )}
+                  </div>
+                </div>
+                <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
+                  task.status === 'DONE' ? 'bg-green-100 text-green-800' :
+                  task.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+                  'bg-orange-100 text-orange-800'
+                }`}>
+                  {task.status.replace('_', ' ')}
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -324,26 +304,28 @@ export default function TasksPage() {
                 )}
                 <div>
                   <p className="text-sm font-medium text-gray-700">Category</p>
-                  <p className="text-gray-900">{formData.category}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Status</p>
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    formData.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                    formData.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
-                    'bg-orange-100 text-orange-800'
-                  }`}>
-                    {formData.status.replace('_', ' ')}
+                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                    {formData.category}
                   </span>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-700">Priority</p>
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                     formData.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
                     formData.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
                     {formData.priority}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Status</p>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    formData.status === 'DONE' ? 'bg-green-100 text-green-800' :
+                    formData.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+                    'bg-orange-100 text-orange-800'
+                  }`}>
+                    {formData.status.replace('_', ' ')}
                   </span>
                 </div>
                 {formData.dueDate && (
@@ -352,16 +334,10 @@ export default function TasksPage() {
                     <p className="text-gray-900">{new Date(formData.dueDate).toLocaleDateString()}</p>
                   </div>
                 )}
-                {formData.assignee && (
+                {formData.assignedTo && (
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Assignee</p>
-                    <p className="text-gray-900">{formData.assignee}</p>
-                  </div>
-                )}
-                {formData.notes && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Notes</p>
-                    <p className="text-gray-900">{formData.notes}</p>
+                    <p className="text-sm font-medium text-gray-700">Assigned To</p>
+                    <p className="text-gray-900">{formData.assignedTo}</p>
                   </div>
                 )}
                 <div className="flex space-x-3 pt-4">
@@ -382,9 +358,7 @@ export default function TasksPage() {
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                   <input
                     type="text"
                     required
@@ -394,9 +368,7 @@ export default function TasksPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
@@ -405,53 +377,44 @@ export default function TasksPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                   <select 
                     value={formData.category}
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   >
-                    <option value="PLANNING">PLANNING</option>
-                    <option value="VENDOR">VENDOR</option>
-                    <option value="DECOR">DECOR</option>
-                    <option value="GUESTS">GUESTS</option>
-                    <option value="OTHER">OTHER</option>
+                    <option value="PLANNING">Planning</option>
+                    <option value="VENDOR">Vendor</option>
+                    <option value="GUEST">Guest</option>
+                    <option value="DAY_OF">Day Of</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status *
-                  </label>
-                  <select 
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  >
-                    <option value="TODO">TODO</option>
-                    <option value="IN_PROGRESS">IN_PROGRESS</option>
-                    <option value="COMPLETED">COMPLETED</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Priority *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority *</label>
                   <select 
                     value={formData.priority}
                     onChange={(e) => setFormData({...formData, priority: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Due Date
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                  <select 
+                    value={formData.status}
+                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  >
+                    <option value="TODO">To Do</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="DONE">Done</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
                   <input
                     type="date"
                     value={formData.dueDate}
@@ -460,25 +423,13 @@ export default function TasksPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Assignee
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
                   <input
                     type="text"
-                    value={formData.assignee}
-                    onChange={(e) => setFormData({...formData, assignee: e.target.value})}
+                    value={formData.assignedTo}
+                    onChange={(e) => setFormData({...formData, assignedTo: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                    rows={2}
+                    placeholder="e.g., Dave, Jessica"
                   />
                 </div>
                 <div className="flex space-x-3 pt-4">
@@ -510,7 +461,7 @@ export default function TasksPage() {
           <div className="bg-white rounded-lg p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold mb-2">Delete Task</h3>
             <p className="text-gray-600 mb-4">
-              Are you sure you want to delete {formData.title}? This action cannot be undone.
+              Are you sure you want to delete "{formData.title}"? This action cannot be undone.
             </p>
             <div className="flex space-x-3">
               <button

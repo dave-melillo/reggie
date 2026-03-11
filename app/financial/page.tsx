@@ -2,76 +2,82 @@
 
 import { useState, useEffect } from "react";
 
-type FinancialItem = {
+type FinancialEntry = {
   id: string;
   category: string;
-  vendor?: string;
-  amount: number;
-  dueDate?: string;
-  status: string;
+  description: string;
+  budgetAmount: number;
+  actualAmount: number;
+  paidAmount: number;
   notes?: string;
 };
 
 export default function FinancialPage() {
-  const [items, setItems] = useState<FinancialItem[]>([]);
+  const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'view' | 'edit'>('create');
-  const [selectedItem, setSelectedItem] = useState<FinancialItem | null>(null);
-  const [filter, setFilter] = useState("ALL");
+  const [selectedEntry, setSelectedEntry] = useState<FinancialEntry | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [formData, setFormData] = useState({
     category: "VENUE",
-    vendor: "",
-    amount: "",
-    dueDate: "",
-    status: "PENDING",
+    description: "",
+    budgetAmount: 0,
+    actualAmount: 0,
+    paidAmount: 0,
     notes: "",
   });
 
-  const loadItems = () => {
+  const loadEntries = () => {
     fetch('/api/financial')
       .then(res => res.json())
       .then(data => {
-        setItems(data);
+        setEntries(data);
         setLoading(false);
       })
       .catch(err => {
-        console.error('Failed to load financial items:', err);
+        console.error('Failed to load financial entries:', err);
         setLoading(false);
       });
   };
 
   useEffect(() => {
-    loadItems();
+    loadEntries();
   }, []);
+
+  const formatCurrency = (cents: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(cents / 100);
+  };
 
   const openCreateModal = () => {
     setModalMode('create');
-    setSelectedItem(null);
+    setSelectedEntry(null);
     setFormData({
       category: "VENUE",
-      vendor: "",
-      amount: "",
-      dueDate: "",
-      status: "PENDING",
+      description: "",
+      budgetAmount: 0,
+      actualAmount: 0,
+      paidAmount: 0,
       notes: "",
     });
     setShowModal(true);
   };
 
-  const openViewModal = (item: FinancialItem) => {
-    setSelectedItem(item);
+  const openViewModal = (entry: FinancialEntry) => {
+    setSelectedEntry(entry);
     setModalMode('view');
     setFormData({
-      category: item.category,
-      vendor: item.vendor || "",
-      amount: item.amount.toString(),
-      dueDate: item.dueDate || "",
-      status: item.status,
-      notes: item.notes || "",
+      category: entry.category,
+      description: entry.description,
+      budgetAmount: entry.budgetAmount,
+      actualAmount: entry.actualAmount,
+      paidAmount: entry.paidAmount,
+      notes: entry.notes || "",
     });
     setShowModal(true);
   };
@@ -87,73 +93,65 @@ export default function FinancialPage() {
     try {
       const url = modalMode === 'create' 
         ? '/api/financial' 
-        : `/api/financial/${selectedItem?.id}`;
+        : `/api/financial/${selectedEntry?.id}`;
       
       const method = modalMode === 'create' ? 'POST' : 'PUT';
-
-      const payload = {
-        ...formData,
-        amount: parseFloat(formData.amount),
-      };
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       });
 
       if (response.ok) {
-        await loadItems();
+        await loadEntries();
         setShowModal(false);
-        setSelectedItem(null);
+        setSelectedEntry(null);
       } else {
-        alert(`Failed to ${modalMode === 'create' ? 'create' : 'update'} financial item`);
+        alert(`Failed to ${modalMode === 'create' ? 'create' : 'update'} entry`);
       }
     } catch (error) {
-      console.error('Error saving financial item:', error);
-      alert('Error saving financial item');
+      console.error('Error saving entry:', error);
+      alert('Error saving entry');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!selectedItem) return;
+    if (!selectedEntry) return;
     
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/financial/${selectedItem.id}`, {
+      const response = await fetch(`/api/financial/${selectedEntry.id}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        await loadItems();
+        await loadEntries();
         setShowModal(false);
         setShowDeleteConfirm(false);
-        setSelectedItem(null);
+        setSelectedEntry(null);
       } else {
-        alert('Failed to delete financial item');
+        alert('Failed to delete entry');
       }
     } catch (error) {
-      console.error('Error deleting financial item:', error);
-      alert('Error deleting financial item');
+      console.error('Error deleting entry:', error);
+      alert('Error deleting entry');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const filteredItems = filter === "ALL" 
-    ? items 
-    : items.filter(i => i.status === filter);
-
-  const totalBudget = items.reduce((sum, item) => sum + item.amount, 0);
-  const paid = items.filter(i => i.status === "PAID").reduce((sum, item) => sum + item.amount, 0);
-  const pending = items.filter(i => i.status === "PENDING").reduce((sum, item) => sum + item.amount, 0);
+  const totalBudget = entries.reduce((sum, e) => sum + e.budgetAmount, 0);
+  const totalActual = entries.reduce((sum, e) => sum + e.actualAmount, 0);
+  const totalPaid = entries.reduce((sum, e) => sum + e.paidAmount, 0);
+  const remaining = totalBudget - totalActual;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">Loading financial items...</p>
+        <p className="text-gray-500">Loading financial data...</p>
       </div>
     );
   }
@@ -161,7 +159,7 @@ export default function FinancialPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Financial Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Financial Overview</h1>
         <button
           onClick={openCreateModal}
           className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
@@ -173,48 +171,36 @@ export default function FinancialPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <p className="text-sm text-gray-600">Total Budget</p>
-          <p className="text-2xl font-bold text-gray-900">${totalBudget.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalBudget)}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm border">
+          <p className="text-sm text-gray-600">Allocated</p>
+          <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalActual)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <p className="text-sm text-gray-600">Paid</p>
-          <p className="text-2xl font-bold text-green-600">${paid.toFixed(2)}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm border">
-          <p className="text-sm text-gray-600">Pending</p>
-          <p className="text-2xl font-bold text-orange-600">${pending.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <p className="text-sm text-gray-600">Remaining</p>
-          <p className="text-2xl font-bold text-blue-600">${(totalBudget - paid).toFixed(2)}</p>
+          <p className={`text-2xl font-bold ${remaining >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+            {formatCurrency(remaining)}
+          </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border p-4">
-        <div className="flex items-center space-x-2 mb-4">
-          <label className="text-sm font-medium text-gray-700">Filter:</label>
-          <select 
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-1 text-sm"
+      {entries.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+          <p className="text-gray-500 text-lg mb-4">No expenses tracked yet</p>
+          <button
+            onClick={openCreateModal}
+            className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700 transition-colors"
           >
-            <option value="ALL">All Items</option>
-            <option value="PENDING">Pending</option>
-            <option value="PAID">Paid</option>
-            <option value="OVERDUE">Overdue</option>
-          </select>
+            Add Your First Expense
+          </button>
         </div>
-
-        {filteredItems.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg mb-4">No financial items found</p>
-            <button
-              onClick={openCreateModal}
-              className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700 transition-colors"
-            >
-              Add Your First Expense
-            </button>
-          </div>
-        ) : (
+      ) : (
+        <div className="bg-white rounded-lg shadow-sm border">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -223,60 +209,64 @@ export default function FinancialPage() {
                     Category
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vendor
+                    Description
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
+                    Budget
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Due Date
+                    Actual
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    Paid
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Variance
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredItems.map((item) => (
-                  <tr 
-                    key={item.id} 
-                    onClick={() => openViewModal(item)}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {item.vendor || '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        ${item.amount.toFixed(2)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        item.status === 'PAID' ? 'bg-green-100 text-green-800' :
-                        item.status === 'OVERDUE' ? 'bg-red-100 text-red-800' :
-                        'bg-orange-100 text-orange-800'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {entries.map((entry) => {
+                  const variance = entry.actualAmount - entry.budgetAmount;
+                  return (
+                    <tr 
+                      key={entry.id} 
+                      onClick={() => openViewModal(entry)}
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                          {entry.category}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{entry.description}</div>
+                        {entry.notes && (
+                          <div className="text-xs text-gray-500">{entry.notes}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(entry.budgetAmount)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(entry.actualAmount)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                        {formatCurrency(entry.paidAmount)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={variance > 0 ? 'text-red-600' : variance < 0 ? 'text-green-600' : 'text-gray-600'}>
+                          {variance > 0 && '+'}{formatCurrency(variance)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal for Create/View/Edit */}
       {showModal && (
@@ -301,33 +291,25 @@ export default function FinancialPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-gray-700">Category</p>
-                  <p className="text-gray-900">{formData.category}</p>
-                </div>
-                {formData.vendor && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Vendor</p>
-                    <p className="text-gray-900">{formData.vendor}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Amount</p>
-                  <p className="text-gray-900 text-lg font-semibold">${parseFloat(formData.amount).toFixed(2)}</p>
-                </div>
-                {formData.dueDate && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Due Date</p>
-                    <p className="text-gray-900">{new Date(formData.dueDate).toLocaleDateString()}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Status</p>
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    formData.status === 'PAID' ? 'bg-green-100 text-green-800' :
-                    formData.status === 'OVERDUE' ? 'bg-red-100 text-red-800' :
-                    'bg-orange-100 text-orange-800'
-                  }`}>
-                    {formData.status}
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                    {formData.category}
                   </span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Description</p>
+                  <p className="text-gray-900">{formData.description}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Budget Amount</p>
+                  <p className="text-gray-900">{formatCurrency(formData.budgetAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Actual Amount</p>
+                  <p className="text-gray-900">{formatCurrency(formData.actualAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Paid Amount</p>
+                  <p className="text-green-600">{formatCurrency(formData.paidAmount)}</p>
                 </div>
                 {formData.notes && (
                   <div>
@@ -353,82 +335,77 @@ export default function FinancialPage() {
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                   <select 
                     value={formData.category}
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   >
-                    <option value="VENUE">VENUE</option>
-                    <option value="CATERING">CATERING</option>
-                    <option value="PHOTOGRAPHY">PHOTOGRAPHY</option>
-                    <option value="ENTERTAINMENT">ENTERTAINMENT</option>
-                    <option value="FLOWERS">FLOWERS</option>
-                    <option value="ATTIRE">ATTIRE</option>
-                    <option value="DECORATIONS">DECORATIONS</option>
-                    <option value="OTHER">OTHER</option>
+                    <option value="VENUE">Venue</option>
+                    <option value="CATERING">Catering</option>
+                    <option value="PHOTOGRAPHY">Photography</option>
+                    <option value="VIDEOGRAPHY">Videography</option>
+                    <option value="DJ">DJ/Entertainment</option>
+                    <option value="FLOWERS">Flowers</option>
+                    <option value="ATTIRE">Attire</option>
+                    <option value="INVITATIONS">Invitations</option>
+                    <option value="TRANSPORTATION">Transportation</option>
+                    <option value="DECOR">Decor</option>
+                    <option value="FAVORS">Favors</option>
+                    <option value="CAKE">Cake</option>
+                    <option value="HAIR_MAKEUP">Hair & Makeup</option>
+                    <option value="OFFICIANT">Officiant</option>
+                    <option value="OTHER">Other</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Vendor
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
                   <input
                     type="text"
-                    value={formData.vendor}
-                    onChange={(e) => setFormData({...formData, vendor: e.target.value})}
+                    required
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    placeholder="e.g., Trump National Golf Club deposit"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Budget Amount ($)</label>
                   <input
                     type="number"
                     step="0.01"
-                    required
-                    value={formData.amount}
-                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                    value={formData.budgetAmount / 100}
+                    onChange={(e) => setFormData({...formData, budgetAmount: Math.round(parseFloat(e.target.value || "0") * 100)})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Due Date
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Actual Amount ($)</label>
                   <input
-                    type="date"
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
+                    type="number"
+                    step="0.01"
+                    value={formData.actualAmount / 100}
+                    onChange={(e) => setFormData({...formData, actualAmount: Math.round(parseFloat(e.target.value || "0") * 100)})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status *
-                  </label>
-                  <select 
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.paidAmount / 100}
+                    onChange={(e) => setFormData({...formData, paidAmount: Math.round(parseFloat(e.target.value || "0") * 100)})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  >
-                    <option value="PENDING">PENDING</option>
-                    <option value="PAID">PAID</option>
-                    <option value="OVERDUE">OVERDUE</option>
-                  </select>
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                   <textarea
                     value={formData.notes}
                     onChange={(e) => setFormData({...formData, notes: e.target.value})}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                    rows={2}
+                    rows={3}
                   />
                 </div>
                 <div className="flex space-x-3 pt-4">
@@ -460,7 +437,7 @@ export default function FinancialPage() {
           <div className="bg-white rounded-lg p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold mb-2">Delete Expense</h3>
             <p className="text-gray-600 mb-4">
-              Are you sure you want to delete this ${parseFloat(formData.amount).toFixed(2)} expense? This action cannot be undone.
+              Are you sure you want to delete "{formData.description}"? This action cannot be undone.
             </p>
             <div className="flex space-x-3">
               <button
