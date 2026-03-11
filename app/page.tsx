@@ -113,8 +113,8 @@ export default function Dashboard() {
     return Math.round((stats.guests.confirmed / stats.guests.total) * 100);
   };
 
-  // Calculate days until wedding (hardcoded for now - you can make this dynamic)
-  const weddingDate = new Date('2026-05-16'); // Replace with actual date
+  // Wedding date
+  const weddingDate = new Date('2026-05-29');
   const today = new Date();
   const daysUntil = Math.ceil((weddingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
