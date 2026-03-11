@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Reggie - Wedding Management App 💍
 
-## Getting Started
+A comprehensive wedding planning application built with Next.js 16, Prisma, and Tailwind CSS.
 
-First, run the development server:
+## Live Preview
+🔗 **https://reggie-pearl.vercel.app**
 
+## Features
+
+### 6 Core Modules
+1. **Dashboard** - Overview of all wedding metrics
+2. **Guests** - Guest list management with RSVP tracking
+3. **Vendors** - Vendor contracts and payment tracking
+4. **Timeline** - Day-of event scheduling
+5. **Financial** - Budget tracking and expense management
+6. **Venue** - Ceremony and reception venue details
+7. **Tasks** - Task management across all categories
+
+### Tech Stack
+- **Framework**: Next.js 16 (App Router)
+- **Database**: Prisma v5 + PostgreSQL
+- **Styling**: Tailwind CSS
+- **State**: React Query (installed, ready to integrate)
+- **Forms**: react-hook-form + zod (installed, ready to integrate)
+- **Auth**: NextAuth (installed, ready to integrate)
+
+## Current Status
+
+✅ **Complete**
+- All 6 module pages with detailed views
+- Navigation and responsive UI
+- Prisma schema (ready for database)
+- API route stubs for all modules
+- Dashboard with summary stats
+
+⏳ **Needs Setup** (see HYDRATION-CHECKLIST.md)
+- Database connection (Vercel Postgres / Neon / Supabase)
+- Sample data seeding
+- Form submission handlers
+- Cross-module features (cascading updates, conflict detection)
+
+## Setup
+
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Set Up Database
+```bash
+# Configure DATABASE_URL in .env.local
+DATABASE_URL="postgresql://user:password@localhost:5432/reggie"
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Run migrations
+npx prisma migrate dev
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# (Optional) Seed sample data
+npx prisma db seed
+```
 
-## Learn More
+### 3. Run Development Server
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Visit [http://localhost:3000](http://localhost:3000)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Database Schema
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+All monetary amounts are stored as **integers in cents** (e.g., $50.00 = 5000).
 
-## Deploy on Vercel
+### Models
+- **Guest** - First/last name, email, phone, category, RSVP status, dietary restrictions
+- **Vendor** - Name, category, contact, contracted/paid amounts, due dates
+- **Task** - Title, description, category, priority, status, assignee
+- **Timeline** - Event date/time, duration, location, category, status
+- **Financial** - Budget/actual/paid amounts per category
+- **Venue** - Name, type, address, capacity, rental cost, availability
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Hydration Checklist
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See **HYDRATION-CHECKLIST.md** for the complete list of:
+- Database setup steps
+- API routes to implement
+- Sample data to seed
+- Form handlers needed
+- Cross-module features
+
+## Deployment
+
+Deployed to **Vercel** with automatic deployments on push to `main`.
+
+### Environment Variables (Vercel)
+```
+DATABASE_URL=<your-postgres-connection-string>
+NEXTAUTH_URL=https://reggie-pearl.vercel.app
+NEXTAUTH_SECRET=<generate-with-openssl-rand-base64-32>
+```
+
+## Notes
+
+- **No database errors**: API routes return empty arrays if DB not connected
+- **Mobile responsive**: All views work on mobile/tablet/desktop
+- **Ready for data**: Once database is connected, all views will populate automatically
+- **Extensible**: Easy to add new categories, fields, or modules
+
+## License
+Private - Wedding Planning for Dave & Partner
