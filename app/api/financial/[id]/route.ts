@@ -3,11 +3,12 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const entry = await prisma.financialEntry.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
     
     if (!entry) {
@@ -23,12 +24,13 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const entry = await prisma.financialEntry.update({
-      where: { id: params.id },
+      where: { id: id },
       data: body,
     });
     return NextResponse.json(entry);
@@ -40,11 +42,12 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await prisma.financialEntry.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
     return NextResponse.json({ success: true });
   } catch (error) {
