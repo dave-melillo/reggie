@@ -11,3 +11,16 @@ export async function GET() {
     return NextResponse.json([], { status: 200 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const entry = await prisma.financial.create({
+      data: body,
+    });
+    return NextResponse.json(entry, { status: 201 });
+  } catch (error) {
+    console.error('Failed to create financial entry:', error);
+    return NextResponse.json({ error: 'Failed to create financial entry' }, { status: 500 });
+  }
+}

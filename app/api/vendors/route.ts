@@ -11,3 +11,16 @@ export async function GET() {
     return NextResponse.json([], { status: 200 }); // Return empty array if DB not connected
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const vendor = await prisma.vendor.create({
+      data: body,
+    });
+    return NextResponse.json(vendor, { status: 201 });
+  } catch (error) {
+    console.error('Failed to create vendor:', error);
+    return NextResponse.json({ error: 'Failed to create vendor' }, { status: 500 });
+  }
+}
