@@ -15,19 +15,8 @@ type FinancialEntry = {
 export default function FinancialPage() {
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState({
-    category: "",
-    description: "",
-    budgetAmount: 0,
-    actualAmount: 0,
-    paidAmount: 0,
-    notes: "",
-  });
-
-  const loadEntries = () => {
+  useEffect(() => {
     fetch('/api/financial')
       .then(res => res.json())
       .then(data => {
@@ -38,44 +27,7 @@ export default function FinancialPage() {
         console.error('Failed to load financial data:', err);
         setLoading(false);
       });
-  };
-
-  useEffect(() => {
-    loadEntries();
   }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-
-    try {
-      const response = await fetch('/api/financial', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        await loadEntries();
-        setShowForm(false);
-        setFormData({
-          category: "",
-          description: "",
-          budgetAmount: 0,
-          actualAmount: 0,
-          paidAmount: 0,
-          notes: "",
-        });
-      } else {
-        alert('Failed to add financial entry');
-      }
-    } catch (error) {
-      console.error('Error adding financial entry:', error);
-      alert('Error adding financial entry');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const totalBudget = entries.reduce((sum, e) => sum + e.budgetAmount, 0);
   const totalActual = entries.reduce((sum, e) => sum + e.actualAmount, 0);
@@ -106,10 +58,7 @@ export default function FinancialPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Financial Overview</h1>
-        <button 
-          onClick={() => setShowForm(true)}
-          className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700"
-        >
+        <button className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700">
           + Add Expense
         </button>
       </div>
@@ -140,10 +89,7 @@ export default function FinancialPage() {
       {entries.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
           <p className="text-gray-500 text-lg mb-4">No expenses tracked yet</p>
-          <button 
-            onClick={() => setShowForm(true)}
-            className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700"
-          >
+          <button className="bg-purple-600 text-white px-6 py-2 rounded-md hover:bg-purple-700">
             Add Your First Expense
           </button>
         </div>
@@ -208,93 +154,6 @@ export default function FinancialPage() {
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-bold mb-4">Add Expense</h2>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="e.g. VENUE, PHOTOGRAPHY, CATERING"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Budget Amount ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.budgetAmount / 100}
-                  onChange={(e) => setFormData({...formData, budgetAmount: Math.round(parseFloat(e.target.value || "0") * 100)})}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Actual Amount ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.actualAmount / 100}
-                  onChange={(e) => setFormData({...formData, actualAmount: Math.round(parseFloat(e.target.value || "0") * 100)})}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.paidAmount / 100}
-                  onChange={(e) => setFormData({...formData, paidAmount: Math.round(parseFloat(e.target.value || "0") * 100)})}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  rows={3}
-                />
-              </div>
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  disabled={submitting}
-                  className="flex-1 border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 disabled:opacity-50"
-                >
-                  {submitting ? 'Adding...' : 'Add Expense'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
