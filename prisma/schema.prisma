@@ -96,3 +96,38 @@ model Venue {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// Email hydration tracking
+model EmailLog {
+  id          String   @id @default(cuid())
+  messageId   String   @unique // Gmail message ID
+  threadId    String?  // Gmail thread ID
+  from        String
+  subject     String
+  receivedAt  DateTime
+  bodyPreview String?  @db.Text
+  bodyFull    String?  @db.Text
+  processed   Boolean  @default(false)
+  extractedData Json?  // Structured data extracted by AI
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([processed])
+  @@index([from])
+  @@index([receivedAt])
+}
+
+// Track data source for audit trail
+model DataSource {
+  id          String   @id @default(cuid())
+  recordType  String   // GUEST, VENDOR, TASK, TIMELINE, FINANCIAL, VENUE
+  recordId    String   // Foreign key to the actual record
+  source      String   // EMAIL, SHEETS, MANUAL
+  sourceId    String?  // Email messageId or sheet row reference
+  confidence  Float?   // AI extraction confidence (0-1)
+  metadata    Json?    // Additional context
+  createdAt   DateTime @default(now())
+  
+  @@index([recordType, recordId])
+  @@index([source])
+}
