@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const entry = await prisma.financialEntry.findUnique({
+    const entry = await prisma.financial.findUnique({
       where: { id: id },
     });
     
@@ -29,7 +29,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const entry = await prisma.financialEntry.update({
+    const entry = await prisma.financial.update({
       where: { id: id },
       data: body,
     });
@@ -46,7 +46,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.financialEntry.delete({
+    await prisma.financial.delete({
       where: { id: id },
     });
     return NextResponse.json({ success: true });

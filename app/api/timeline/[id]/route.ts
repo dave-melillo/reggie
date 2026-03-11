@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const event = await prisma.timelineEvent.findUnique({
+    const event = await prisma.timeline.findUnique({
       where: { id: id },
     });
     
@@ -29,7 +29,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const event = await prisma.timelineEvent.update({
+    const event = await prisma.timeline.update({
       where: { id: id },
       data: body,
     });
@@ -46,7 +46,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.timelineEvent.delete({
+    await prisma.timeline.delete({
       where: { id: id },
     });
     return NextResponse.json({ success: true });
