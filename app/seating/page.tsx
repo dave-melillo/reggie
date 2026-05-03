@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 type Guest = {
   id: string;
   firstName: string;
   lastName: string;
+  email?: string | null;
+  phone?: string | null;
   category: string;
+  inviteType: string;
   rsvpStatus: string;
   plusOne: boolean;
-  dietaryRestrictions?: string;
+  dietaryRestrictions?: string | null;
+  notes?: string | null;
 };
 
-type Assignments = Record<string, string[]>; // tableNumber -> guestIds
+type Assignments = Record<string, string[]>;
 
 type SeatingChart = {
   id: string;
@@ -30,9 +34,31 @@ const seatsFor = (g: Guest) => 1 + (g.plusOne ? 1 : 0);
 const PRESETS = [
   { label: "10 × 10", numTables: 10, seatsPerTable: 10 },
   { label: "12 × 10", numTables: 12, seatsPerTable: 10 },
+  { label: "14 × 10", numTables: 14, seatsPerTable: 10 },
   { label: "10 × 12", numTables: 10, seatsPerTable: 12 },
-  { label: "8 × 8", numTables: 8, seatsPerTable: 8 },
 ];
+
+type GuestForm = {
+  firstName: string;
+  lastName: string;
+  category: string;
+  inviteType: string;
+  rsvpStatus: string;
+  plusOne: boolean;
+  dietaryRestrictions: string;
+  notes: string;
+};
+
+const emptyForm: GuestForm = {
+  firstName: "",
+  lastName: "",
+  category: "FAMILY",
+  inviteType: "CEREMONY_RECEPTION",
+  rsvpStatus: "CONFIRMED",
+  plusOne: false,
+  dietaryRestrictions: "",
+  notes: "",
+};
 
 export default function SeatingPage() {
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -49,6 +75,15 @@ export default function SeatingPage() {
   const [saving, setSaving] = useState(false);
   const [rsvpFilter, setRsvpFilter] = useState<string>("EXCLUDE_DECLINED");
   const [search, setSearch] = useState("");
+
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [tableInput, setTableInput] = useState("");
+  const tableInputRef = useRef<HTMLInputElement>(null);
+
+  const [modalGuest, setModalGuest] = useState<Guest | "new" | null>(null);
+  const [form, setForm] = useState<GuestForm>(emptyForm);
+  const [submittingGuest, setSubmittingGuest] = useState(false);
+
   const dragData = useRef<{ guestId: string; from: string } | null>(null);
 
   useEffect(() => {
@@ -115,13 +150,16 @@ export default function SeatingPage() {
     return n;
   }, [assignments, guestsById]);
 
-  const seatsAtTable = (tableNum: number) => {
-    const ids = assignments[String(tableNum)] || [];
-    return ids.reduce((sum, id) => {
-      const g = guestsById.get(id);
-      return sum + (g ? seatsFor(g) : 0);
-    }, 0);
-  };
+  const seatsAtTable = useCallback(
+    (tableNum: number) => {
+      const ids = assignments[String(tableNum)] || [];
+      return ids.reduce((sum, id) => {
+        const g = guestsById.get(id);
+        return sum + (g ? seatsFor(g) : 0);
+      }, 0);
+    },
+    [assignments, guestsById]
+  );
 
   const markDirty = () => setDirty(true);
 
@@ -131,54 +169,124 @@ export default function SeatingPage() {
     });
   };
 
+  const moveGuest = useCallback(
+    (guestId: string, target: number | null) => {
+      const guest = guestsById.get(guestId);
+      if (!guest) return false;
+
+      if (target !== null) {
+        if (target < 1 || target > numTables) {
+          alert(`Table ${target} doesn't exist (1–${numTables}).`);
+          return false;
+        }
+        const currentSeats = seatsAtTable(target);
+        const alreadyHere = (assignments[String(target)] || []).includes(guestId);
+        if (!alreadyHere && currentSeats + seatsFor(guest) > seatsPerTable) {
+          alert(
+            `Table ${target} doesn't have enough seats for ${guest.firstName}${
+              guest.plusOne ? " (+1)" : ""
+            }.`
+          );
+          return false;
+        }
+      }
+
+      const next: Assignments = { ...assignments };
+      Object.keys(next).forEach((k) => (next[k] = [...(next[k] || [])]));
+      removeFromAll(next, guestId);
+      if (target !== null) {
+        const k = String(target);
+        next[k] = [...(next[k] || []), guestId];
+      }
+      setAssignments(next);
+      markDirty();
+      return true;
+    },
+    [assignments, guestsById, numTables, seatsPerTable, seatsAtTable]
+  );
+
+  // Click-to-assign: select then click table or type number
+  const onSelectGuest = (guestId: string) => {
+    setSelectedGuestId((prev) => (prev === guestId ? null : guestId));
+    setTableInput("");
+  };
+
+  useEffect(() => {
+    if (selectedGuestId) {
+      const t = setTimeout(() => tableInputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [selectedGuestId]);
+
+  const commitTableInput = () => {
+    if (!selectedGuestId) return;
+    const trimmed = tableInput.trim().toLowerCase();
+    if (!trimmed) return;
+    if (trimmed === "u" || trimmed === "unassign" || trimmed === "0") {
+      moveGuest(selectedGuestId, null);
+      setSelectedGuestId(null);
+      setTableInput("");
+      return;
+    }
+    const n = parseInt(trimmed, 10);
+    if (Number.isNaN(n)) {
+      alert("Type a table number, or 'u' to unassign.");
+      return;
+    }
+    const ok = moveGuest(selectedGuestId, n);
+    if (ok) {
+      setSelectedGuestId(null);
+      setTableInput("");
+    }
+  };
+
+  // Keyboard: Esc deselects; digits go to the input via focus
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedGuestId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const onTableClick = (tableNum: number) => {
+    if (!selectedGuestId) return;
+    const ok = moveGuest(selectedGuestId, tableNum);
+    if (ok) setSelectedGuestId(null);
+  };
+
+  const onUnassignClick = () => {
+    if (!selectedGuestId) return;
+    moveGuest(selectedGuestId, null);
+    setSelectedGuestId(null);
+  };
+
+  // Drag-drop (kept as alternative)
   const handleDragStart = (e: React.DragEvent, guestId: string, from: string) => {
     dragData.current = { guestId, from };
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", guestId);
   };
-
-  const handleDropOnTable = (e: React.DragEvent, tableNum: number) => {
-    e.preventDefault();
-    const data = dragData.current;
-    if (!data) return;
-    const guest = guestsById.get(data.guestId);
-    if (!guest) return;
-
-    const key = String(tableNum);
-    const currentSeats = seatsAtTable(tableNum);
-    const alreadyHere = (assignments[key] || []).includes(guest.id);
-    if (!alreadyHere && currentSeats + seatsFor(guest) > seatsPerTable) {
-      alert(`Table ${tableNum} doesn't have enough seats for ${guest.firstName}${guest.plusOne ? " (+1)" : ""}.`);
-      dragData.current = null;
-      return;
-    }
-
-    const next: Assignments = { ...assignments };
-    Object.keys(next).forEach((k) => (next[k] = [...(next[k] || [])]));
-    removeFromAll(next, guest.id);
-    next[key] = [...(next[key] || []), guest.id];
-    setAssignments(next);
-    markDirty();
-    dragData.current = null;
-  };
-
-  const handleDropOnUnassigned = (e: React.DragEvent) => {
-    e.preventDefault();
-    const data = dragData.current;
-    if (!data) return;
-    const next: Assignments = { ...assignments };
-    Object.keys(next).forEach((k) => (next[k] = [...(next[k] || [])]));
-    removeFromAll(next, data.guestId);
-    setAssignments(next);
-    markDirty();
-    dragData.current = null;
-  };
-
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   };
+  const handleDropOnTable = (e: React.DragEvent, tableNum: number) => {
+    e.preventDefault();
+    const data = dragData.current;
+    if (!data) return;
+    moveGuest(data.guestId, tableNum);
+    dragData.current = null;
+  };
+  const handleDropOnUnassigned = (e: React.DragEvent) => {
+    e.preventDefault();
+    const data = dragData.current;
+    if (!data) return;
+    moveGuest(data.guestId, null);
+    dragData.current = null;
+  };
 
+  // Chart actions
   const newChart = () => {
     if (dirty && !confirm("Discard unsaved changes?")) return;
     setChartId(null);
@@ -187,6 +295,7 @@ export default function SeatingPage() {
     setSeatsPerTable(10);
     setAssignments({});
     setDirty(false);
+    setSelectedGuestId(null);
   };
 
   const loadChart = (id: string) => {
@@ -199,6 +308,7 @@ export default function SeatingPage() {
     setSeatsPerTable(chart.seatsPerTable);
     setAssignments((chart.assignments as Assignments) || {});
     setDirty(false);
+    setSelectedGuestId(null);
   };
 
   const saveChart = async () => {
@@ -287,6 +397,82 @@ export default function SeatingPage() {
     markDirty();
   };
 
+  // Guest CRUD (synced with /api/guests)
+  const openAddGuest = () => {
+    setForm(emptyForm);
+    setModalGuest("new");
+  };
+  const openEditGuest = (g: Guest) => {
+    setForm({
+      firstName: g.firstName,
+      lastName: g.lastName,
+      category: g.category,
+      inviteType: g.inviteType,
+      rsvpStatus: g.rsvpStatus,
+      plusOne: g.plusOne,
+      dietaryRestrictions: g.dietaryRestrictions || "",
+      notes: g.notes || "",
+    });
+    setModalGuest(g);
+  };
+  const closeGuestModal = () => {
+    setModalGuest(null);
+    setForm(emptyForm);
+  };
+
+  const submitGuest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingGuest(true);
+    try {
+      const payload = { ...form };
+      const isNew = modalGuest === "new";
+      const url = isNew ? "/api/guests" : `/api/guests/${(modalGuest as Guest).id}`;
+      const method = isNew ? "POST" : "PUT";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("save failed");
+      const saved: Guest = await res.json();
+      setGuests((prev) => {
+        if (isNew) return [...prev, saved].sort((a, b) => a.lastName.localeCompare(b.lastName));
+        return prev.map((g) => (g.id === saved.id ? saved : g));
+      });
+      closeGuestModal();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save guest");
+    } finally {
+      setSubmittingGuest(false);
+    }
+  };
+
+  const deleteGuest = async () => {
+    if (modalGuest === null || modalGuest === "new") return;
+    const g = modalGuest as Guest;
+    if (!confirm(`Delete ${g.firstName} ${g.lastName}? This removes them from all seating charts as well.`))
+      return;
+    setSubmittingGuest(true);
+    try {
+      const res = await fetch(`/api/guests/${g.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+      setGuests((prev) => prev.filter((x) => x.id !== g.id));
+      // also remove from current chart's assignments
+      const next: Assignments = { ...assignments };
+      Object.keys(next).forEach((k) => (next[k] = (next[k] || []).filter((id) => id !== g.id)));
+      setAssignments(next);
+      markDirty();
+      if (selectedGuestId === g.id) setSelectedGuestId(null);
+      closeGuestModal();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete guest");
+    } finally {
+      setSubmittingGuest(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -295,40 +481,20 @@ export default function SeatingPage() {
     );
   }
 
+  const selectedGuest = selectedGuestId ? guestsById.get(selectedGuestId) : null;
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Seating Chart</h1>
         <div className="flex items-center gap-2">
-          {dirty && (
-            <span className="text-xs text-orange-600 font-medium">Unsaved changes</span>
-          )}
-          <button
-            onClick={newChart}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            New
-          </button>
-          <button
-            onClick={duplicateChart}
-            disabled={saving}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-          >
-            Duplicate
-          </button>
+          {dirty && <span className="text-xs text-orange-600 font-medium">Unsaved changes</span>}
+          <button onClick={newChart} className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">New</button>
+          <button onClick={duplicateChart} disabled={saving} className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">Duplicate</button>
           {chartId && (
-            <button
-              onClick={deleteChart}
-              className="px-3 py-2 text-sm border border-red-300 text-red-700 rounded-md hover:bg-red-50"
-            >
-              Delete
-            </button>
+            <button onClick={deleteChart} className="px-3 py-2 text-sm border border-red-300 text-red-700 rounded-md hover:bg-red-50">Delete</button>
           )}
-          <button
-            onClick={saveChart}
-            disabled={saving}
-            className="px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
-          >
+          <button onClick={saveChart} disabled={saving} className="px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50">
             {saving ? "Saving..." : "Save"}
           </button>
         </div>
@@ -338,70 +504,30 @@ export default function SeatingPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-medium text-gray-700 mb-1">Chart Name</label>
-            <input
-              type="text"
-              value={chartName}
-              onChange={(e) => {
-                setChartName(e.target.value);
-                markDirty();
-              }}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900"
-            />
+            <input type="text" value={chartName} onChange={(e) => { setChartName(e.target.value); markDirty(); }} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Load Chart</label>
-            <select
-              value={chartId || ""}
-              onChange={(e) => e.target.value && loadChart(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900"
-            >
+            <select value={chartId || ""} onChange={(e) => e.target.value && loadChart(e.target.value)} className="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900">
               <option value="">— Select —</option>
               {charts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1"># Tables</label>
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={numTables}
-              onChange={(e) => {
-                setNumTables(Math.max(1, parseInt(e.target.value) || 1));
-                markDirty();
-              }}
-              className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900"
-            />
+            <input type="number" min={1} max={50} value={numTables} onChange={(e) => { setNumTables(Math.max(1, parseInt(e.target.value) || 1)); markDirty(); }} className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Seats / Table</label>
-            <input
-              type="number"
-              min={1}
-              max={30}
-              value={seatsPerTable}
-              onChange={(e) => {
-                setSeatsPerTable(Math.max(1, parseInt(e.target.value) || 1));
-                markDirty();
-              }}
-              className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900"
-            />
+            <input type="number" min={1} max={30} value={seatsPerTable} onChange={(e) => { setSeatsPerTable(Math.max(1, parseInt(e.target.value) || 1)); markDirty(); }} className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900" />
           </div>
           <div className="flex flex-col gap-1">
             <label className="block text-xs font-medium text-gray-700">Presets</label>
             <div className="flex gap-1">
               {PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  onClick={() => applyPreset(p.numTables, p.seatsPerTable)}
-                  className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  {p.label}
-                </button>
+                <button key={p.label} onClick={() => applyPreset(p.numTables, p.seatsPerTable)} className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50">{p.label}</button>
               ))}
             </div>
           </div>
@@ -415,26 +541,48 @@ export default function SeatingPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
-        <div
-          className="bg-white rounded-lg shadow-sm border p-3 h-[70vh] flex flex-col"
-          onDragOver={handleDragOver}
-          onDrop={handleDropOnUnassigned}
-        >
-          <div className="mb-2">
-            <h2 className="font-semibold text-gray-900 text-sm mb-2">Unassigned Guests</h2>
+      {/* Selection bar */}
+      {selectedGuest && (
+        <div className="sticky top-2 z-30 bg-purple-600 text-white rounded-lg shadow-lg p-3 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <span className="text-xs opacity-80">Move</span>
+            <div className="font-semibold">
+              {selectedGuest.firstName} {selectedGuest.lastName}
+              {selectedGuest.plusOne && <span className="text-purple-200"> +1</span>}
+            </div>
+          </div>
+          <span className="text-xs opacity-80">→</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs opacity-80">Table</span>
             <input
+              ref={tableInputRef}
               type="text"
-              placeholder="Search…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm mb-2 text-gray-900"
+              inputMode="numeric"
+              value={tableInput}
+              onChange={(e) => setTableInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitTableInput(); }
+              }}
+              placeholder="#"
+              className="w-16 px-2 py-1 rounded text-gray-900 text-center font-semibold"
             />
-            <select
-              value={rsvpFilter}
-              onChange={(e) => setRsvpFilter(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm text-gray-900"
-            >
+            <button onClick={commitTableInput} className="px-3 py-1 text-sm bg-white text-purple-700 rounded font-medium hover:bg-purple-50">Go</button>
+          </div>
+          <button onClick={onUnassignClick} className="px-3 py-1 text-sm border border-white/40 rounded hover:bg-purple-700">Unassign</button>
+          <button onClick={() => setSelectedGuestId(null)} className="px-3 py-1 text-sm border border-white/40 rounded hover:bg-purple-700">Cancel (Esc)</button>
+          <span className="text-xs opacity-80 hidden md:block">Tip: click a table to drop them there</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
+        <div className="bg-white rounded-lg shadow-sm border p-3 h-[70vh] flex flex-col" onDragOver={handleDragOver} onDrop={handleDropOnUnassigned}>
+          <div className="mb-2">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="font-semibold text-gray-900 text-sm">Unassigned Guests</h2>
+              <button onClick={openAddGuest} className="text-xs px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">+ Add Guest</button>
+            </div>
+            <input type="text" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm mb-2 text-gray-900" />
+            <select value={rsvpFilter} onChange={(e) => setRsvpFilter(e.target.value)} className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm text-gray-900">
               <option value="EXCLUDE_DECLINED">All except declined</option>
               <option value="CONFIRMED_ONLY">Confirmed only</option>
               <option value="ALL">All guests</option>
@@ -444,7 +592,17 @@ export default function SeatingPage() {
             {unassigned.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-4">All visible guests are seated.</p>
             ) : (
-              unassigned.map((g) => <GuestTile key={g.id} guest={g} from="unassigned" onDragStart={handleDragStart} />)
+              unassigned.map((g) => (
+                <GuestTile
+                  key={g.id}
+                  guest={g}
+                  from="unassigned"
+                  selected={selectedGuestId === g.id}
+                  onSelect={onSelectGuest}
+                  onEdit={openEditGuest}
+                  onDragStart={handleDragStart}
+                />
+              ))
             )}
           </div>
         </div>
@@ -454,36 +612,34 @@ export default function SeatingPage() {
             const ids = assignments[String(tableNum)] || [];
             const used = seatsAtTable(tableNum);
             const over = used > seatsPerTable;
+            const canDrop = !!selectedGuestId;
             return (
               <div
                 key={tableNum}
+                onClick={() => onTableClick(tableNum)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDropOnTable(e, tableNum)}
-                className={`bg-white rounded-lg shadow-sm border-2 ${
-                  over ? "border-red-400" : used === seatsPerTable ? "border-green-400" : "border-gray-200"
-                } p-3 min-h-[180px] flex flex-col`}
+                className={`bg-white rounded-lg shadow-sm border-2 p-3 min-h-[180px] flex flex-col transition-all ${
+                  over
+                    ? "border-red-400"
+                    : used === seatsPerTable
+                    ? "border-green-400"
+                    : "border-gray-200"
+                } ${canDrop ? "cursor-pointer hover:border-purple-500 hover:shadow-md" : ""}`}
               >
                 <div className="flex justify-between items-center mb-2">
                   <h3 className="font-semibold text-gray-900 text-sm">Table {tableNum}</h3>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs ${over ? "text-red-600" : "text-gray-600"}`}>
-                      {used}/{seatsPerTable}
-                    </span>
+                    <span className={`text-xs ${over ? "text-red-600" : "text-gray-600"}`}>{used}/{seatsPerTable}</span>
                     {ids.length > 0 && (
-                      <button
-                        onClick={() => clearTable(tableNum)}
-                        className="text-xs text-gray-400 hover:text-red-600"
-                        title="Clear table"
-                      >
-                        ✕
-                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); clearTable(tableNum); }} className="text-xs text-gray-400 hover:text-red-600" title="Clear table">✕</button>
                     )}
                   </div>
                 </div>
                 <div className="flex-1 space-y-1">
                   {ids.length === 0 ? (
-                    <p className="text-xs text-gray-300 text-center py-6 border-2 border-dashed border-gray-200 rounded">
-                      Drop guests here
+                    <p className={`text-xs text-center py-6 border-2 border-dashed rounded ${canDrop ? "border-purple-300 text-purple-500" : "border-gray-200 text-gray-300"}`}>
+                      {canDrop ? "Click to seat here" : "Drop guests here"}
                     </p>
                   ) : (
                     ids.map((id) => {
@@ -494,6 +650,9 @@ export default function SeatingPage() {
                           key={id}
                           guest={guest}
                           from={String(tableNum)}
+                          selected={selectedGuestId === id}
+                          onSelect={onSelectGuest}
+                          onEdit={openEditGuest}
                           onDragStart={handleDragStart}
                           compact
                         />
@@ -506,6 +665,70 @@ export default function SeatingPage() {
           })}
         </div>
       </div>
+
+      {/* Add/Edit guest modal */}
+      {modalGuest !== null && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={closeGuestModal}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">
+              {modalGuest === "new" ? "Add Guest" : "Edit Guest"}
+            </h2>
+            <form onSubmit={submitGuest} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">First Name *</label>
+                  <input type="text" required value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Last Name *</label>
+                  <input type="text" required value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">RSVP</label>
+                  <select value={form.rsvpStatus} onChange={(e) => setForm({ ...form, rsvpStatus: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900">
+                    <option value="CONFIRMED">CONFIRMED</option>
+                    <option value="PENDING">PENDING</option>
+                    <option value="DECLINED">DECLINED</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
+                  <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900">
+                    <option value="FAMILY">FAMILY</option>
+                    <option value="FRIEND">FRIEND</option>
+                    <option value="WORK">WORK</option>
+                    <option value="VENDOR">VENDOR</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center">
+                <input type="checkbox" id="plusOneSeat" checked={form.plusOne} onChange={(e) => setForm({ ...form, plusOne: e.target.checked })} className="mr-2" />
+                <label htmlFor="plusOneSeat" className="text-sm text-gray-700">Plus One (counts as 2 seats)</label>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Dietary Restrictions</label>
+                <input type="text" value={form.dietaryRestrictions} onChange={(e) => setForm({ ...form, dietaryRestrictions: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                {modalGuest !== "new" && (
+                  <button type="button" onClick={deleteGuest} disabled={submittingGuest} className="px-3 py-2 text-sm border border-red-300 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50">Delete</button>
+                )}
+                <div className="flex-1" />
+                <button type="button" onClick={closeGuestModal} disabled={submittingGuest} className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={submittingGuest} className="px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50">
+                  {submittingGuest ? "Saving..." : modalGuest === "new" ? "Add" : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -513,11 +736,17 @@ export default function SeatingPage() {
 function GuestTile({
   guest,
   from,
+  selected,
+  onSelect,
+  onEdit,
   onDragStart,
   compact,
 }: {
   guest: Guest;
   from: string;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  onEdit: (g: Guest) => void;
   onDragStart: (e: React.DragEvent, guestId: string, from: string) => void;
   compact?: boolean;
 }) {
@@ -527,13 +756,13 @@ function GuestTile({
       : guest.rsvpStatus === "DECLINED"
       ? "bg-red-50 border-red-200"
       : "bg-yellow-50 border-yellow-200";
+  const ring = selected ? "ring-2 ring-purple-500 ring-offset-1" : "";
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, guest.id, from)}
-      className={`${rsvpColor} border rounded px-2 py-1 cursor-move hover:shadow-sm transition-shadow ${
-        compact ? "text-xs" : "text-sm"
-      }`}
+      onClick={(e) => { e.stopPropagation(); onSelect(guest.id); }}
+      className={`${rsvpColor} ${ring} border rounded px-2 py-1 cursor-pointer hover:shadow-sm transition-all ${compact ? "text-xs" : "text-sm"}`}
       title={`${guest.firstName} ${guest.lastName} • ${guest.category} • ${guest.rsvpStatus}${
         guest.dietaryRestrictions ? ` • ${guest.dietaryRestrictions}` : ""
       }`}
@@ -543,9 +772,18 @@ function GuestTile({
           {guest.firstName} {guest.lastName}
           {guest.plusOne && <span className="text-purple-600"> +1</span>}
         </span>
-        {guest.dietaryRestrictions && (
-          <span className="text-[10px] text-amber-700" title={guest.dietaryRestrictions}>🍽</span>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {guest.dietaryRestrictions && (
+            <span className="text-[10px] text-amber-700" title={guest.dietaryRestrictions}>🍽</span>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(guest); }}
+            className="text-[10px] text-gray-400 hover:text-purple-600 px-1"
+            title="Edit guest"
+          >
+            ✎
+          </button>
+        </div>
       </div>
     </div>
   );
