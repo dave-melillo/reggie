@@ -31,6 +31,14 @@ type SeatingChart = {
 
 const seatsFor = (g: Guest) => 1 + (g.plusOne ? 1 : 0);
 
+const escapeHtml = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const PRESETS = [
   { label: "10 × 10", numTables: 10, seatsPerTable: 10 },
   { label: "12 × 10", numTables: 12, seatsPerTable: 10 },
@@ -397,6 +405,225 @@ export default function SeatingPage() {
     markDirty();
   };
 
+  const safeFileBase = () =>
+    (chartName || "seating-chart").replace(/[^a-z0-9-_]+/gi, "_");
+
+  const downloadFile = (filename: string, content: string, mime: string) => {
+    const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const csvEscape = (val: string) => {
+    if (val == null) return "";
+    const s = String(val);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const buildExportRows = () => {
+    const rows: {
+      table: string;
+      seat: number;
+      firstName: string;
+      lastName: string;
+      plusOne: string;
+      rsvp: string;
+      dietary: string;
+      category: string;
+    }[] = [];
+    for (let t = 1; t <= numTables; t++) {
+      const ids = assignments[String(t)] || [];
+      let seat = 0;
+      for (const id of ids) {
+        const g = guestsById.get(id);
+        if (!g) continue;
+        seat += 1;
+        rows.push({
+          table: `Table ${t}`,
+          seat,
+          firstName: g.firstName,
+          lastName: g.lastName,
+          plusOne: g.plusOne ? "Yes" : "",
+          rsvp: g.rsvpStatus,
+          dietary: g.dietaryRestrictions || "",
+          category: g.category,
+        });
+        if (g.plusOne) {
+          seat += 1;
+          rows.push({
+            table: `Table ${t}`,
+            seat,
+            firstName: `(+1 of ${g.firstName} ${g.lastName})`,
+            lastName: "",
+            plusOne: "",
+            rsvp: g.rsvpStatus,
+            dietary: "",
+            category: g.category,
+          });
+        }
+      }
+    }
+    return rows;
+  };
+
+  const exportCsv = () => {
+    const rows = buildExportRows();
+    const header = [
+      "Table",
+      "Seat",
+      "First Name",
+      "Last Name",
+      "Plus One",
+      "RSVP",
+      "Dietary",
+      "Category",
+    ];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          r.table,
+          r.seat,
+          r.firstName,
+          r.lastName,
+          r.plusOne,
+          r.rsvp,
+          r.dietary,
+          r.category,
+        ]
+          .map((v) => csvEscape(String(v)))
+          .join(",")
+      );
+    }
+    downloadFile(`${safeFileBase()}.csv`, lines.join("\n"), "text/csv");
+  };
+
+  const exportTxt = () => {
+    const lines: string[] = [];
+    lines.push(chartName);
+    lines.push("=".repeat(Math.max(chartName.length, 10)));
+    lines.push(`${numTables} tables × ${seatsPerTable} seats   |   ${totalAssigned} assigned of ${totalCapacity}`);
+    lines.push(`Exported ${new Date().toLocaleString()}`);
+    lines.push("");
+    for (let t = 1; t <= numTables; t++) {
+      const ids = assignments[String(t)] || [];
+      const used = seatsAtTable(t);
+      lines.push(`Table ${t}  (${used}/${seatsPerTable})`);
+      lines.push("-".repeat(20));
+      if (ids.length === 0) {
+        lines.push("  (empty)");
+      } else {
+        for (const id of ids) {
+          const g = guestsById.get(id);
+          if (!g) continue;
+          const tags: string[] = [];
+          if (g.plusOne) tags.push("+1");
+          if (g.dietaryRestrictions) tags.push(`diet: ${g.dietaryRestrictions}`);
+          if (g.rsvpStatus !== "CONFIRMED") tags.push(g.rsvpStatus);
+          const tagStr = tags.length ? `  [${tags.join(", ")}]` : "";
+          lines.push(`  - ${g.firstName} ${g.lastName}${tagStr}`);
+        }
+      }
+      lines.push("");
+    }
+    // Unseated bucket
+    const unseated = guests
+      .filter((g) => g.rsvpStatus !== "DECLINED" && !assignedIds.has(g.id))
+      .sort((a, b) => a.lastName.localeCompare(b.lastName));
+    if (unseated.length > 0) {
+      lines.push("UNSEATED (non-declined)");
+      lines.push("-".repeat(20));
+      for (const g of unseated) {
+        const tag = g.plusOne ? " (+1)" : "";
+        lines.push(`  - ${g.firstName} ${g.lastName}${tag}`);
+      }
+    }
+    downloadFile(`${safeFileBase()}.txt`, lines.join("\n"), "text/plain");
+  };
+
+  const exportPrint = () => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Pop-up blocked. Allow pop-ups for this site to use Print View.");
+      return;
+    }
+    const tableHtml: string[] = [];
+    for (let t = 1; t <= numTables; t++) {
+      const ids = assignments[String(t)] || [];
+      const used = seatsAtTable(t);
+      const items = ids
+        .map((id) => {
+          const g = guestsById.get(id);
+          if (!g) return "";
+          const plus = g.plusOne ? ' <span class="plus">+1</span>' : "";
+          const diet = g.dietaryRestrictions
+            ? ` <span class="diet">🍽 ${escapeHtml(g.dietaryRestrictions)}</span>`
+            : "";
+          return `<li>${escapeHtml(g.firstName)} ${escapeHtml(g.lastName)}${plus}${diet}</li>`;
+        })
+        .join("");
+      tableHtml.push(`
+        <section class="card">
+          <header>
+            <h2>Table ${t}</h2>
+            <span class="count">${used}/${seatsPerTable}</span>
+          </header>
+          <ol>${items || '<li class="empty">— empty —</li>'}</ol>
+        </section>
+      `);
+    }
+    const unseated = guests
+      .filter((g) => g.rsvpStatus !== "DECLINED" && !assignedIds.has(g.id))
+      .sort((a, b) => a.lastName.localeCompare(b.lastName));
+    const unseatedHtml = unseated.length
+      ? `<section class="card unseated">
+          <header><h2>Unseated</h2><span class="count">${unseated.length}</span></header>
+          <ol>${unseated
+            .map((g) => `<li>${escapeHtml(g.firstName)} ${escapeHtml(g.lastName)}${g.plusOne ? ' <span class="plus">+1</span>' : ""}</li>`)
+            .join("")}</ol>
+        </section>`
+      : "";
+    win.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>${escapeHtml(chartName)} — Seating</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #111; }
+  h1 { margin: 0 0 4px; }
+  .meta { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; break-inside: avoid; }
+  .card header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 6px; }
+  .card h2 { margin: 0; font-size: 15px; }
+  .card .count { font-size: 12px; color: #666; }
+  .card ol { margin: 0; padding-left: 22px; font-size: 13px; line-height: 1.5; }
+  .card .empty { color: #aaa; list-style: none; margin-left: -18px; }
+  .plus { color: #7c3aed; font-weight: 600; font-size: 11px; }
+  .diet { color: #b45309; font-size: 11px; }
+  .unseated { grid-column: 1 / -1; background: #fffbeb; border-color: #fde68a; }
+  .actions { margin-bottom: 16px; }
+  .actions button { padding: 8px 14px; font-size: 14px; border: 1px solid #7c3aed; background: #7c3aed; color: white; border-radius: 6px; cursor: pointer; }
+  @media print {
+    .actions { display: none; }
+    body { margin: 12mm; }
+    .grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .card { font-size: 11px; }
+  }
+</style></head>
+<body>
+  <h1>${escapeHtml(chartName)}</h1>
+  <div class="meta">${numTables} tables × ${seatsPerTable} seats &nbsp;|&nbsp; ${totalAssigned} assigned of ${totalCapacity} &nbsp;|&nbsp; ${new Date().toLocaleString()}</div>
+  <div class="actions"><button onclick="window.print()">Print / Save as PDF</button></div>
+  <div class="grid">${tableHtml.join("")}${unseatedHtml}</div>
+</body></html>`);
+    win.document.close();
+  };
+
   // Guest CRUD (synced with /api/guests)
   const openAddGuest = () => {
     setForm(emptyForm);
@@ -489,6 +716,11 @@ export default function SeatingPage() {
         <h1 className="text-3xl font-bold text-gray-900">Seating Chart</h1>
         <div className="flex items-center gap-2">
           {dirty && <span className="text-xs text-orange-600 font-medium">Unsaved changes</span>}
+          <div className="flex items-center gap-1 mr-1 pr-2 border-r border-gray-300">
+            <button onClick={exportCsv} title="Download CSV" className="px-2 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">CSV</button>
+            <button onClick={exportTxt} title="Download text list" className="px-2 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">TXT</button>
+            <button onClick={exportPrint} title="Open print/PDF view" className="px-2 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">Print</button>
+          </div>
           <button onClick={newChart} className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">New</button>
           <button onClick={duplicateChart} disabled={saving} className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">Duplicate</button>
           {chartId && (
